@@ -1,5 +1,3 @@
-// geometry.js
-
 export class Vector2 {
     
     x;
