@@ -1,3 +1,4 @@
+import AABB from "./aabb";
 import { Vector2 } from "./geometry"
 
 export default class Shape {
@@ -5,12 +6,15 @@ export default class Shape {
     #velocity;
     #angularVelocity;
     #color;
+    aabb;
+    type;
 
     constructor() {
         this._angle = 0
         this.#velocity = new Vector2(0, 0)
         this.#angularVelocity = 0
         this.#color = "rgb(0, 0, 0)"
+        this.aabb = new AABB(0, 0, 0, 0)
     }
 
     get angle() {

@@ -22,106 +22,171 @@ function randomRGB() {
     return `rgb(${r}, ${g}, ${b})`;
 }
 
+const ctx = canvas.getContext('2d');
+const PI2 = Math.PI * 2
+
 function draw(tFrame) {
-    const context = canvas.getContext('2d');
-
-    // clear canvas
-    context.clearRect(0, 0, canvas.width, canvas.height)
-
-    gameState.figures.forEach((figure)=>{
-
-        context.save();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-        if (figure.angle) {
-            context.translate(figure.x, figure.y);
-            context.rotate(figure.angle);
-            context.translate(-figure.x, -figure.y);
+    const figures = gameState.figures;
+    const len = figures.length;
+    
+    for (let i = 0; i < len; i++) {
+        const figure = figures[i];
+        
+        ctx.save();
+        ctx.translate(figure.x, figure.y);
+        ctx.rotate(figure.angle);
+        ctx.translate(-figure.x, -figure.y);
+        
+        ctx.fillStyle = figure.color;
+        
+        const type = figure.type;
+        
+        if (type === 'square') {
+            ctx.fillRect(
+                figure.x - figure.halfSize, 
+                figure.y - figure.halfSize, 
+                figure.size, 
+                figure.size
+            );
+        } 
+        else if (type === 'circle') {
+            ctx.beginPath();
+            ctx.arc(figure.x, figure.y, figure.radius, 0, PI2);
+            ctx.fill();
+        } 
+        else if (type === 'triangle') {
+            const v = figure.vertices;
+            ctx.beginPath();
+            ctx.moveTo(v[0].x, v[0].y);
+            ctx.lineTo(v[1].x, v[1].y);
+            ctx.lineTo(v[2].x, v[2].y);
+            ctx.closePath();
+            ctx.fill();
         }
-
-        context.fillStyle = figure.color;
-
-        switch (figure.constructor.name) {
-            case 'Square':
-                context.save();
-                context.translate(figure.x, figure.y);
-                context.rotate(figure.angle);
-                context.fillRect(-figure.halfSize, -figure.halfSize, figure.size, figure.size);
-                context.restore();
-                break;
-
-            case 'Circle':
-                context.beginPath();
-                context.arc(figure.x, figure.y, figure.radius, 0, Math.PI * 2);
-                context.fill();
-                break;
-
-            case 'Triangle':
-                context.beginPath();
-                context.moveTo(figure.vertices[0].x, figure.vertices[0].y);
-                context.lineTo(figure.vertices[1].x, figure.vertices[1].y);
-                context.lineTo(figure.vertices[2].x, figure.vertices[2].y);
-                context.closePath();
-                context.fill();
-                break;
-        }
-
-        context.restore();
-    })
+        
+        ctx.restore();
+    }
 }
+
+function insertionSortByMinX(figures) {
+    for (let i = 1; i < figures.length; i++) {
+        const currentFigure = figures[i];
+        const currentMinX = currentFigure.aabb.min_x;
+        
+        let j = i - 1;
+        while (j >= 0 && figures[j].aabb.min_x > currentMinX) {
+            figures[j + 1] = figures[j];
+            j--;
+        }
+        figures[j + 1] = currentFigure;
+    }
+    return figures;
+}
+
+class Pair {
+    x;
+    y;
+
+    constructor(x, y) {
+        this.x = x
+        this.y = y
+    }
+}
+
+function sweepAndPrune() {
+
+    let figuresToSort;
+    if (sortedByX.length !== figuresCount) {
+        figuresToSort = [...gameState.figures];
+    } else {
+        figuresToSort = sortedByX;
+    }
+    
+    sortedByX = insertionSortByMinX(figuresToSort);
+    
+    const potentialPairs = [];
+    
+    for (let i = 0; i < sortedByX.length; i++) {
+        const figureA = sortedByX[i];
+        const maxXA = figureA.aabb.max_x;
+        
+        for (let j = i + 1; j < sortedByX.length; j++) {
+            const figureB = sortedByX[j];
+            
+            if (figureB.aabb.min_x > maxXA) {
+                break;
+            }
+            
+            if (figureA.aabb.max_y < figureB.aabb.min_y || figureA.aabb.min_y > figureB.aabb.max_y) {
+                continue;
+            }
+            
+            potentialPairs.push(new Pair(i, j))
+        }
+    }
+    
+    return potentialPairs;
+}
+
+let sortedByX = [];
 
 function update(tick) {
 
-    for (let i = 0; i < gameState.figures.length; i++) {
+    const potentialPairs = sweepAndPrune()
 
-        for (let j = i + 1; j < gameState.figures.length; j++) {
+    for (const p of potentialPairs) {
 
-            if (CollisionDetection.intersect(gameState.figures[i], gameState.figures[j])) {
-                
-                // корректируем текущий вектор скорости фигуры
+        const figureA = sortedByX[p.x];
+        const figureB = sortedByX[p.y];
 
-                const tempVx = gameState.figures[i].velocity.x;
-                const tempVy = gameState.figures[i].velocity.y;
-                
-                gameState.figures[i].velocity.x = gameState.figures[j].velocity.x;
-                gameState.figures[i].velocity.y = gameState.figures[j].velocity.y;
-                
-                gameState.figures[j].velocity.x = tempVx;
-                gameState.figures[j].velocity.y = tempVy;
-            }
+        if (CollisionDetection.intersect(figureA, figureB)) {
+
+            // корректируем текущий вектор скорости фигуры
+            const tempVx = figureA.velocity.x;
+            const tempVy = figureA.velocity.y;
+
+            figureA.velocity.x = figureB.velocity.x;
+            figureA.velocity.y = figureB.velocity.y;
+
+            figureB.velocity.x = tempVx;
+            figureB.velocity.y = tempVy;
         }
+    }
+
+    gameState.figures.forEach((figure)=>{
 
         const borderIntersect = CollisionDetection.intersectBorder(
-            gameState.figures[i],
+            figure,
             0, 0,
             canvas.width, canvas.height
         );
 
         if (borderIntersect.crossed) {
             if (borderIntersect.left || borderIntersect.right) {
-                gameState.figures[i].velocity.x = -gameState.figures[i].velocity.x;
+                figure.velocity.x = -figure.velocity.x;
 
                 if (borderIntersect.left) {
-                    gameState.figures[i].x += 0.1
+                    figure.x += 0.1
                 }
                 else {
-                    gameState.figures[i].x -= 0.1
+                    figure.x -= 0.1
                 }
             }
 
             if (borderIntersect.top || borderIntersect.bottom) {
-                gameState.figures[i].velocity.y = -gameState.figures[i].velocity.y;
+                figure.velocity.y = -figure.velocity.y;
 
                 if (borderIntersect.top) {
-                    gameState.figures[i].y += 0.1
+                    figure.y += 0.1
                 }
                 else {
-                    gameState.figures[i].y -= 0.1
+                    figure.y -= 0.1
                 }
             }
         }
-    }
 
-    gameState.figures.forEach((figure)=>{
         figure.x += figure.velocity.x
         figure.y += figure.velocity.y
         figure.angle += figure.angularVelocity
@@ -148,6 +213,9 @@ function stopGame(handle) {
     window.cancelAnimationFrame(handle);
 }
 
+// Количество фигур
+const figuresCount = 3000
+
 function setup() {
     canvas.width = window.innerWidth
     canvas.height = window.innerHeight
@@ -155,11 +223,8 @@ function setup() {
     gameState.lastRender = gameState.lastTick
     gameState.tickLength = 15 //ms
 
-    // Количество фигур
-    const figuresCount = 100
-
-    const minSize = 20
-    const maxSize = 50
+    const minSize = 5
+    const maxSize = 5
 
     const minSpeed = -10
     const maxSpeed = 10

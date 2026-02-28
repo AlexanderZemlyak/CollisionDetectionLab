@@ -1,7 +1,4 @@
 import { Vector2, pointInTriangle, pointToVectorSQDistance, satIntersect } from "./geometry"
-import Circle from "./circle"
-import Square from "./square"
-import Triangle from "./triangle"
 
 export default class CollisionDetection {
 
@@ -11,8 +8,15 @@ export default class CollisionDetection {
         "Triangle" : { "Triangle" : this.#intersectTT }
     }
 
+    static aabbCheck(shape1, shape2) {
+        return shape1.aabb.intersects(shape2.aabb)
+    }
+
     static intersect(shape1, shape2) {
-        
+
+        // if (!this.aabbCheck(shape1, shape2))
+        //    return false;
+
         const firstClassName = shape1.constructor.name
         const secondClassName = shape2.constructor.name
 
@@ -40,43 +44,26 @@ export default class CollisionDetection {
                 bottom: false
             };
         
-        if (shape instanceof Circle) {
-            if (shape.x - shape.radius < boundaryMinX) {
-                result.left = true;
-                result.crossed = true;
-            }
-            if (shape.x + shape.radius > boundaryMaxX) {
-                result.right = true;
-                result.crossed = true;
-            }
-            if (shape.y - shape.radius < boundaryMinY) {
-                result.top = true;
-                result.crossed = true;
-            }
-            if (shape.y + shape.radius > boundaryMaxY) {
-                result.bottom = true;
-                result.crossed = true;
-            }
+        const minX = shape.aabb.min_x
+        const maxX = shape.aabb.max_x
+        const minY = shape.aabb.min_y
+        const maxY = shape.aabb.max_y
+        
+        if (minX < boundaryMinX) {
+            result.left = true;
+            result.crossed = true;
         }
-        else if (shape instanceof Square || shape instanceof Triangle) {
-            for (const vertex of shape.vertices) {
-                if (vertex.x < boundaryMinX) {
-                    result.left = true;
-                    result.crossed = true;
-                }
-                if (vertex.x > boundaryMaxX) {
-                    result.right = true;
-                    result.crossed = true;
-                }
-                if (vertex.y < boundaryMinY) {
-                    result.top = true;
-                    result.crossed = true;
-                }
-                if (vertex.y > boundaryMaxY) {
-                    result.bottom = true;
-                    result.crossed = true;
-                }
-            }
+        if (maxX > boundaryMaxX) {
+            result.right = true;
+            result.crossed = true;
+        }
+        if (minY < boundaryMinY) {
+            result.top = true;
+            result.crossed = true;
+        }
+        if (maxY > boundaryMaxY) {
+            result.bottom = true;
+            result.crossed = true;
         }
 
         return result;
